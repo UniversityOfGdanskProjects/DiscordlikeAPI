@@ -1,0 +1,15 @@
+version: "3"
+services:
+  jsneo4j:
+    image: neo4j
+    hostname: js_neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - ./neo4j/data:/data
+      - ./neo4j/logs:/logs
+      - ./neo4j/import:/var/lib/neo4j/import
+      - ./neo4j/plugins:/plugins
+    environment:
+      -  NEO4J_AUTH=neo4j/test1234
