@@ -165,4 +165,21 @@ recordRoutes.route('/channels/:id').get(async function(req, res) {
         })
     }
 })
+
+recordRoutes.route('/channels').post(async function(req, res) {
+    const { name, id } = req.body
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MERGE (c:Channel {id: $id, name: $name})',
+        {name: name,
+            id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Created ${summary.counters.updates().nodesCreated} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
 module.exports = recordRoutes;
