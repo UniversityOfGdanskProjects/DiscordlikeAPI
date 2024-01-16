@@ -236,4 +236,26 @@ recordRoutes.route('/messages').post(async function(req, res) {
     })
 })
 
+recordRoutes.route("/messages/:id").get(async function(req, res){
+    const { id } = req.params
+    const driver = await dbo.getDB()
+    let { records, _ } = await driver.executeQuery(
+        'MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message {id: $id})<-[:SEND]-(u:User) RETURN m, u, c',
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    const results = {
+        "id": records[0].get("m").properties.id,
+        "text": records[0].get("m").properties.text,
+        "date": records[0].get("m").properties.date,
+        "edited": records[0].get("m").properties.edited,
+        "user": records[0].get("u").properties.id.low,
+        "channel": records[0].get("c").properties.id.low
+    }
+    console.log(records)
+    res.status(200).json({
+        "status": "Success",
+        "result": results
+    })
+})
 module.exports = recordRoutes;
