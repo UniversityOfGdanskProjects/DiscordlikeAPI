@@ -13,7 +13,9 @@ recordRoutes.route('/users').get(async function(req, res){
     records.forEach((record) => {
         results.push({
             "id": record.get("u").properties.id,
-            "name": record.get("u").properties.name
+            "name": record.get("u").properties.name,
+            "password": record.get("u").properties.password,
+            "isAdmin": record.get("u").properties.isAdmin
         })
     })
     res.status(200).json({
@@ -25,11 +27,14 @@ recordRoutes.route('/users').get(async function(req, res){
 })
 
 recordRoutes.route('/users').post(async function(req, res) {
-    const { name, id } = req.body
+    const { name, id, password, isAdmin } = req.body
     const driver = await dbo.getDB()
     let { _, summary } = await driver.executeQuery(
-        'MERGE (u:User {id: $id, name: $name})',
-        {name: name, id: parseInt(id)},
+        'MERGE (u:User {id: $id, name: $name, password: $password, isAdmin: $isAdmin})',
+        {name: name,
+            id: parseInt(id),
+            password: password,
+            isAdmin: isAdmin},
         { database: 'neo4j' }
     )
     res.status(200).json({
@@ -43,14 +48,16 @@ recordRoutes.route('/users/:id').get(async function(req, res) {
     const { id } = req.params
     const driver = await dbo.getDB()
     let { records, _ } = await driver.executeQuery(
-        'MATCH (n:User {id: $id}) RETURN n',
+        'MATCH (u:User {id: $id}) RETURN u',
         {id: parseInt(id)},
         { database: 'neo4j' }
     )
     if (records.length > 0){
         const result = {
-            "id": records[0].get("n").properties.id,
-            "name": records[0].get("n").properties.name
+            "id": records[0].get("u").properties.id,
+            "name": records[0].get("u").properties.name,
+            "password": records[0].get("u").properties.password,
+            "isAdmin": records[0].get("u").properties.isAdmin
         }
         res.status(200).json({
             "status": "Success",
@@ -64,8 +71,6 @@ recordRoutes.route('/users/:id').get(async function(req, res) {
             "error": "No user found"
         })
     }
-
-
 })
 
 recordRoutes.route('/users/:id').delete(async function(req, res) {
@@ -79,6 +84,32 @@ recordRoutes.route('/users/:id').delete(async function(req, res) {
     res.status(200).json({
         "status": "Success",
         "result": `Deleted ${summary.counters.updates().nodesDeleted} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
+recordRoutes.route('/users/:id').put(async function(req, res) {
+    const { id } = req.params
+    const { name, password, isAdmin } = req.body
+    let query = 'MATCH (u:User {id: $id})'
+    if (!!name){
+        query = `${query} SET u.name = $name`
+    }
+    if (!!password){
+        query = `${query} SET u.password = $password`
+    }
+    if (!!isAdmin){
+        query = `${query} SET u.isAdmin = $isAdmin`
+    }
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        query,
+        {id: parseInt(id), name: name, password: password, isAdmin: isAdmin},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Set ${summary.counters.updates().propertiesSet} properties ` +
             `in ${summary.resultAvailableAfter} ms.`
     })
 })
