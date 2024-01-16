@@ -12,4 +12,9 @@ services:
       - ./neo4j/import:/var/lib/neo4j/import
       - ./neo4j/plugins:/plugins
     environment:
-      -  NEO4J_AUTH=neo4j/test1234
+      - NEO4J_AUTH=neo4j/test1234
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4jLABS_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_whitelist=apoc.*
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
