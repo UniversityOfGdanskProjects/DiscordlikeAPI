@@ -258,4 +258,20 @@ recordRoutes.route("/messages/:id").get(async function(req, res){
         "result": results
     })
 })
+
+recordRoutes.route('/messages/:id').delete(async function(req, res) {
+    const { id } = req.params
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MATCH (m:Message {id: $id}) DETACH DELETE m',
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Deleted ${summary.counters.updates().nodesDeleted} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
 module.exports = recordRoutes;
