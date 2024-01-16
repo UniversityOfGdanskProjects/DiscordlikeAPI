@@ -197,5 +197,28 @@ recordRoutes.route('/channels/:id').delete(async function(req, res) {
     })
 })
 
+recordRoutes.route('/channels/:id').put(async function(req, res) {
+    const { id } = req.params
+    const { name } = req.body
+    if (!!name){
+        const driver = await dbo.getDB()
+        let { records, summary } = await driver.executeQuery(
+            'MATCH (c:Channel {id: $id}) SET c.name = $name',
+            {id: parseInt(id), name: name},
+            { database: 'neo4j' }
+        )
+        console.log(records)
+        res.status(200).json({
+            "status": "Success",
+            "result": `Set ${summary.counters.updates().propertiesSet} properties ` +
+                `in ${summary.resultAvailableAfter} ms.`
+        })
+    } else {
+        res.status(200).json({
+            "status": "Error",
+            "result": `No parameters given`
+        })
+    }
+})
 
 module.exports = recordRoutes;
