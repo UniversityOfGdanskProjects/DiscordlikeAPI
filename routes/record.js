@@ -290,4 +290,20 @@ recordRoutes.route('/messages/:id').put(async function(req, res) {
     })
 })
 
+recordRoutes.route('/calls').post(async function(req, res) {
+    const { id, user, channel } = req.body
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MATCH (u:User {id: $user}), (ch:Channel {id: $channel})' +
+        'CREATE (u)-[:STARTED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch)',
+        {id: parseInt(id), date: new Date(Date.now()).toISOString(), user: user, channel: channel},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Created ${summary.counters.updates().nodesCreated} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
 module.exports = recordRoutes;
