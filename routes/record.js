@@ -182,4 +182,20 @@ recordRoutes.route('/channels').post(async function(req, res) {
     })
 })
 
+recordRoutes.route('/channels/:id').delete(async function(req, res) {
+    const { id } = req.params
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MATCH (c:Channel {id: $id}) DETACH DELETE c',
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Deleted ${summary.counters.updates().nodesDeleted} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
+
 module.exports = recordRoutes;
