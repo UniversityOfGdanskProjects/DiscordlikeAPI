@@ -221,12 +221,12 @@ recordRoutes.route('/channels/:id').put(async function(req, res) {
 })
 
 recordRoutes.route('/messages').post(async function(req, res) {
-    const { id, text, date, edited, user, channel } = req.body
+    const { id, text, user, channel } = req.body
     const driver = await dbo.getDB()
     let { _, summary } = await driver.executeQuery(
         'MATCH (u:User {id: $user}), (c:Channel {id: $channel})' +
         'CREATE (u)-[:SEND]->(m:Message {id: $id, text: $text, date: $date, edited: $edited})<-[:HAS_MESSAGE]-(c)',
-        {id: parseInt(id), text: text, date: date, edited: edited, user: user, channel: channel},
+        {id: parseInt(id), text: text, date: new Date(Date.now()).toISOString(), edited: false, user: user, channel: channel},
         { database: 'neo4j' }
     )
     res.status(200).json({
@@ -270,6 +270,22 @@ recordRoutes.route('/messages/:id').delete(async function(req, res) {
     res.status(200).json({
         "status": "Success",
         "result": `Deleted ${summary.counters.updates().nodesDeleted} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
+recordRoutes.route('/messages/:id').put(async function(req, res) {
+    const { id } = req.params
+    const { text } = req.body
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MATCH (m:Message {id: $id}) SET m.text = $text, m.edited = $edited',
+        {id: parseInt(id), text: text, edited: true},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Set ${summary.counters.updates().propertiesSet} properties ` +
             `in ${summary.resultAvailableAfter} ms.`
     })
 })
