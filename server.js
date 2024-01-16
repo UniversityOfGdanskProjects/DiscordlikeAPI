@@ -9,7 +9,6 @@
     app.use(require("./routes/record.js"));
 
     const dbo = require("./db/conn");
-    console.log(require('dotenv').config());
 
     app.listen(port, ()=> {
         dbo.connectToDB();
