@@ -114,4 +114,55 @@ recordRoutes.route('/users/:id').put(async function(req, res) {
     })
 })
 
+
+
+recordRoutes.route('/channels').get(async function(req, res){
+    const driver = await dbo.getDB()
+    let { records, _ } = await driver.executeQuery(
+        'MATCH (c:Channel) RETURN c',
+        {},
+        { database: 'neo4j' }
+    )
+    const results = []
+    records.forEach((record) => {
+        results.push({
+            "id": record.get("c").properties.id,
+            "name": record.get("c").properties.name
+        })
+    })
+    res.status(200).json({
+        "status": "Success",
+        "result": {
+            "channels": results
+        }
+    })
+})
+
+
+recordRoutes.route('/channels/:id').get(async function(req, res) {
+    const { id } = req.params
+    const driver = await dbo.getDB()
+    let { records, _ } = await driver.executeQuery(
+        'MATCH (c:Channel {id: $id}) RETURN c',
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    if (records.length > 0){
+        const result = {
+            "id": records[0].get("c").properties.id,
+            "name": records[0].get("c").properties.name
+        }
+        res.status(200).json({
+            "status": "Success",
+            "result": {
+                "channel": result
+            }
+        })
+    } else {
+        res.status(200).json({
+            "status": "Error",
+            "error": "No channel found"
+        })
+    }
+})
 module.exports = recordRoutes;
