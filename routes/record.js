@@ -4,7 +4,7 @@ const dbo = require("../db/conn");
 
 recordRoutes.route('/users').get(async function(req, res){
     const driver = await dbo.getDB()
-    let { records, summary } = await driver.executeQuery(
+    let { records, _ } = await driver.executeQuery(
         'MATCH (u:User) RETURN u',
         {},
         { database: 'neo4j' }
@@ -27,7 +27,7 @@ recordRoutes.route('/users').get(async function(req, res){
 recordRoutes.route('/users').post(async function(req, res) {
     const { name, id } = req.body
     const driver = await dbo.getDB()
-    let { records, summary } = await driver.executeQuery(
+    let { _, summary } = await driver.executeQuery(
         'MERGE (u:User {id: $id, name: $name})',
         {name: name, id: parseInt(id)},
         { database: 'neo4j' }
@@ -42,20 +42,44 @@ recordRoutes.route('/users').post(async function(req, res) {
 recordRoutes.route('/users/:id').get(async function(req, res) {
     const { id } = req.params
     const driver = await dbo.getDB()
-    let { records, summary } = await driver.executeQuery(
+    let { records, _ } = await driver.executeQuery(
         'MATCH (n:User {id: $id}) RETURN n',
         {id: parseInt(id)},
         { database: 'neo4j' }
     )
-    const result = {
-        "id": records[0].get("n").properties.id,
-        "name": records[0].get("n").properties.name
+    if (records.length > 0){
+        const result = {
+            "id": records[0].get("n").properties.id,
+            "name": records[0].get("n").properties.name
+        }
+        res.status(200).json({
+            "status": "Success",
+            "result": {
+                "user": result
+            }
+        })
+    } else {
+        res.status(200).json({
+            "status": "Error",
+            "error": "No user found"
+        })
     }
+
+
+})
+
+recordRoutes.route('/users/:id').delete(async function(req, res) {
+    const { id } = req.params
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MATCH (n:User {id: $id}) DETACH DELETE n',
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
     res.status(200).json({
         "status": "Success",
-        "result": {
-            "user": result
-        }
+        "result": `Deleted ${summary.counters.updates().nodesDeleted} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
     })
 })
 
