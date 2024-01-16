@@ -207,7 +207,6 @@ recordRoutes.route('/channels/:id').put(async function(req, res) {
             {id: parseInt(id), name: name},
             { database: 'neo4j' }
         )
-        console.log(records)
         res.status(200).json({
             "status": "Success",
             "result": `Set ${summary.counters.updates().propertiesSet} properties ` +
@@ -219,6 +218,22 @@ recordRoutes.route('/channels/:id').put(async function(req, res) {
             "result": `No parameters given`
         })
     }
+})
+
+recordRoutes.route('/messages').post(async function(req, res) {
+    const { id, text, date, edited, user, channel } = req.body
+    const driver = await dbo.getDB()
+    let { _, summary } = await driver.executeQuery(
+        'MATCH (u:User {id: $user}), (c:Channel {id: $channel})' +
+        'CREATE (u)-[:SEND]->(m:Message {id: $id, text: $text, date: $date, edited: $edited})<-[:HAS_MESSAGE]-(c)',
+        {id: parseInt(id), text: text, date: date, edited: edited, user: user, channel: channel},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Created ${summary.counters.updates().nodesCreated} nodes ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
 })
 
 module.exports = recordRoutes;
