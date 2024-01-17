@@ -295,7 +295,7 @@ recordRoutes.route('/calls').post(async function(req, res) {
     const driver = await dbo.getDB()
     let { _, summary } = await driver.executeQuery(
         'MATCH (u:User {id: $user}), (ch:Channel {id: $channel})' +
-        'CREATE (u)-[:STARTED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch)',
+        'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch)',
         {id: parseInt(id), date: new Date(Date.now()).toISOString(), user: user, channel: channel},
         { database: 'neo4j' }
     )
@@ -318,6 +318,31 @@ recordRoutes.route('/calls/:id').delete(async function(req, res) {
         "status": "Success",
         "result": `Deleted ${summary.counters.updates().nodesDeleted} nodes ` +
             `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
+recordRoutes.route('/calls/:id').get(async function(req, res) {
+    const { id } = req.params
+    const driver = await dbo.getDB()
+    let { records, summary } = await driver.executeQuery(
+        'MATCH (u:User)-[:JOINED]->(c:Call {id: $id})<-[:HAS_CALLS]-(ch:Channel)\n' +
+        'WITH u.id as coll, c AS call, ch AS channel\n' +
+        'UNWIND coll AS x\n' +
+        'WITH x, call, channel\n' +
+        'WITH DISTINCT x, channel.id AS channel, call AS call\n' +
+        'RETURN collect(x) AS users, channel, call',
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    const results = {
+        "id": records[0].get("call").properties.id,
+        "date": records[0].get("call").properties.date,
+        "channel": records[0].get("channel").properties,
+        "users": records[0].get("users").map((record) => record.low)
+    }
+    res.status(200).json({
+        "status": "Success",
+        "result": results
     })
 })
 
