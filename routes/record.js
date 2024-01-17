@@ -223,6 +223,22 @@ recordRoutes.route('/channels/:id/users').post(async function(req, res) {
     })
 })
 
+
+recordRoutes.route('/channels/:channelId/users/:userId').delete(async function(req, res) {
+    const { channelId, userId } = req.params
+    const driver = await dbo.getDB()
+    let { records, summary } = await driver.executeQuery(
+        'MATCH (:Channel {id: $channel})<-[r:IS_IN]-(:User {id: $user}) DELETE r',
+        {channel: parseInt(channelId), user: parseInt(userId)},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Deleted ${summary.counters.updates().relationshipsDeleted} relationships ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
 recordRoutes.route('/channels/:id').put(async function(req, res) {
     const { id } = req.params
     const { name } = req.body
