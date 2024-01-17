@@ -11,10 +11,10 @@ recordRoutes.route('/users').get(async function(req, res){
     )
     const results = []
     records.forEach((record) => {
+        const id = record.get("u").properties.id
         results.push({
-            "id": record.get("u").properties.id,
+            "id": id.low? id.low : id,
             "name": record.get("u").properties.name,
-            "password": record.get("u").properties.password,
             "isAdmin": record.get("u").properties.isAdmin
         })
     })
@@ -48,16 +48,21 @@ recordRoutes.route('/users/:id').get(async function(req, res) {
     const { id } = req.params
     const driver = await dbo.getDB()
     let { records, _ } = await driver.executeQuery(
-        'MATCH (u:User {id: $id}) RETURN u',
+        'MATCH (u:User {id: $id})\n' +
+        'OPTIONAL MATCH (u)-[:IS_IN]->(ch:Channel)\n' +
+        'OPTIONAL MATCH (u)-[:JOINED]-(c:Call)\n' +
+        'RETURN u AS user, ch.id AS channels, c.id AS call',
         {id: parseInt(id)},
         { database: 'neo4j' }
     )
     if (records.length > 0){
         const result = {
-            "id": records[0].get("u").properties.id,
-            "name": records[0].get("u").properties.name,
-            "password": records[0].get("u").properties.password,
-            "isAdmin": records[0].get("u").properties.isAdmin
+            "id": parseInt(id),
+            "name": records[0].get("user").properties.name,
+            "password": records[0].get("user").properties.password,
+            "isAdmin": records[0].get("user").properties.isAdmin,
+            "channels": records.map((record) => record.get("channels").low),
+            "activity": records[0].get("call")? `In call ${records[0].get("call")}`: "No activity"
         }
         res.status(200).json({
             "status": "Success",
