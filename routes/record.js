@@ -388,4 +388,31 @@ recordRoutes.route('/calls/:id').get(async function(req, res) {
     })
 })
 
+recordRoutes.route('/calls/:id/users').post(async function(req, res) {
+    const { id } = req.params
+    const { users } = req.body
+    const query = users.reduce((acc, curr, i) => {
+        return `${acc}, (u${i}:User {id: ${curr}})`
+    }, 'MATCH (c:Call {id: $id})')
+    const queryFinal = users.reduce((acc, curr, i) => {
+        if (i !== 0){
+            return `${acc}, (u${i})-[:JOINED]->(c)`
+
+        }
+        return `${acc} (u${i})-[:JOINED]->(c)`
+    }, `${query}\nCREATE`)
+    // console.log(queryFinal)
+    const driver = await dbo.getDB()
+    let { records, summary } = await driver.executeQuery(
+        queryFinal,
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Created ${summary.counters.updates().relationshipsCreated} relationships ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
 module.exports = recordRoutes;
