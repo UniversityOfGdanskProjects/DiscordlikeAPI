@@ -197,6 +197,32 @@ recordRoutes.route('/channels/:id').delete(async function(req, res) {
     })
 })
 
+recordRoutes.route('/channels/:id/users').post(async function(req, res) {
+    const { id } = req.params
+    const { users } = req.body
+    const query = users.reduce((acc, curr, i) => {
+        return `${acc}, (u${i}:User {id: ${curr}})`
+    }, 'MATCH (c:Channel {id: $id})')
+    const queryFinal = users.reduce((acc, curr, i) => {
+        if (i !== 0){
+            return `${acc}, (u${i})-[:IS_IN]->(c)`
+
+        }
+        return `${acc} (u${i})-[:IS_IN]->(c)`
+    }, `${query}\nCREATE`)
+    const driver = await dbo.getDB()
+    let { records, summary } = await driver.executeQuery(
+        queryFinal,
+        {id: parseInt(id)},
+        { database: 'neo4j' }
+    )
+    res.status(200).json({
+        "status": "Success",
+        "result": `Created ${summary.counters.updates().relationshipsCreated} relationships ` +
+            `in ${summary.resultAvailableAfter} ms.`
+    })
+})
+
 recordRoutes.route('/channels/:id').put(async function(req, res) {
     const { id } = req.params
     const { name } = req.body
