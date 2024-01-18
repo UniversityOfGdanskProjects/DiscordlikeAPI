@@ -4,10 +4,10 @@ const dbo = require('../db/conn');
 
 const recordRoutes = express.Router();
 
-recordRoutes.route('/users/:calls/:channel').get(async (req, res) => {
-  const { calls, channel } = req.params;
+recordRoutes.route('/users').get(async (req, res) => {
+  const { calls, channel } = req.query;
   let query = 'MATCH (u:User)';
-  if (!calls) {
+  if (calls) {
     query = `${query}, (u)-->(:Call)`;
   }
   if (channel) {
@@ -136,16 +136,16 @@ recordRoutes.route('/users/:id').put(async (req, res) => {
   });
 });
 
-recordRoutes.route('/channels/:calls/:user').get(async (req, res) => {
-  const { calls, user } = req.params;
-  let query = 'MATCH (u:User)';
-  if (!calls) {
-    query = `${query}, (u)-->(:Call)`;
+recordRoutes.route('/channels').get(async (req, res) => {
+  const { calls, user } = req.query;
+  let query = 'MATCH (c:Channel)';
+  if (calls) {
+    query = `${query}, (c)-->(:Call)`;
   }
   if (user) {
-    query = `${query}, (u)-->(:User {id: $user})`;
+    query = `${query}, (c)<--(:User {id: $user})`;
   }
-  query = `${query} RETURN u`;
+  query = `${query} RETURN c`;
   const driver = await dbo.getDB();
   const { records, _ } = await driver.executeQuery(
     query,
@@ -155,7 +155,7 @@ recordRoutes.route('/channels/:calls/:user').get(async (req, res) => {
   const results = [];
   records.forEach((record) => {
     results.push({
-      id: record.get('c').properties.id,
+      id: record.get('c').properties.id.low,
       name: record.get('c').properties.name,
     });
   });
