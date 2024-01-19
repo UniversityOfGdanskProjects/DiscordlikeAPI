@@ -459,4 +459,22 @@ recordRoutes.route('/calls/:callId/users/:userId').delete(async (req, res) => {
   });
 });
 
+recordRoutes.route('/screenshares').post(async (req, res) => {
+  const { id, user, call } = req.body;
+  const driver = await dbo.getDB();
+  const { _, summary } = await driver.executeQuery(
+    'MATCH (u:User {id: $user}), (c:Call {id: $call})'
+        + 'CREATE (u)-[:STARTED]->(s:Screenshare {id: $id, date: $date})<-[:HAS_SCREENSHARE]-(c)',
+    {
+      id: parseInt(id), date: new Date(Date.now()).toISOString(), user, call,
+    },
+    { database: 'neo4j' },
+  );
+  res.status(200).json({
+    status: 'Success',
+    result: `Created ${summary.counters.updates().nodesCreated} nodes `
+            + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
 module.exports = recordRoutes;
