@@ -492,4 +492,26 @@ recordRoutes.route('/screenshares/:id').delete(async (req, res) => {
   });
 });
 
+recordRoutes.route('/screenshares/:id').get(async (req, res) => {
+  const { id } = req.params;
+  const driver = await dbo.getDB();
+  const { records, summary } = await driver.executeQuery(
+    'MATCH (u:User)-[:STARTED]->(s:Screenshare {id: $id})<-[:HAS_SCREENSHARE]-(c:Call)\n'
+        + 'RETURN u.id AS user, s AS screenshare, c.id AS call',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  console.log(records);
+  const results = {
+    id: records[0].get('screenshare').properties.id,
+    date: records[0].get('screenshare').properties.date,
+    call: records[0].get('call'),
+    user: records[0].get('user').low,
+  };
+  res.status(200).json({
+    status: 'Success',
+    result: results,
+  });
+});
+
 module.exports = recordRoutes;
