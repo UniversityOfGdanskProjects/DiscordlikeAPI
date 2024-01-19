@@ -477,4 +477,19 @@ recordRoutes.route('/screenshares').post(async (req, res) => {
   });
 });
 
+recordRoutes.route('/screenshares/:id').delete(async (req, res) => {
+  const { id } = req.params;
+  const driver = await dbo.getDB();
+  const { _, summary } = await driver.executeQuery(
+    'MATCH (s:Screenshare {id: $id}) DETACH DELETE s',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  res.status(200).json({
+    status: 'Success',
+    result: `Deleted ${summary.counters.updates().nodesDeleted} nodes `
+            + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
 module.exports = recordRoutes;
