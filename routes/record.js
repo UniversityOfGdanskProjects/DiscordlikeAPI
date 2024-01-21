@@ -375,7 +375,7 @@ recordRoutes.route('/messages').get(async (req, res) => {
   const driver = await dbo.getDB();
   const { records, _ } = await driver.executeQuery(
     query,
-    { user: parseInt(user) },
+    { user: parseInt(user), channel: parseInt(channel) },
     { database: 'neo4j' },
   );
   const results = [];
@@ -392,7 +392,7 @@ recordRoutes.route('/messages').get(async (req, res) => {
   res.status(200).json({
     status: 'Success',
     result: {
-      channels: results,
+      messages: results,
     },
   });
 });
@@ -491,6 +491,41 @@ recordRoutes.route('/calls/:callId/users/:userId').delete(async (req, res) => {
     status: 'Success',
     result: `Deleted ${summary.counters.updates().relationshipsDeleted} relationships `
             + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
+recordRoutes.route('/calls').get(async (req, res) => {
+  const { channel, user, screenshare } = req.query;
+  let query = 'MATCH (ch:Channel)-->(c:Call)';
+  if (channel) {
+    query = `${query}, (c)<--(:Channel {id: $channel})`;
+  }
+  if (user) {
+    query = `${query}, (c)<--(:User {id: $user})`;
+  }
+  if (screenshare) {
+    query = `${query}, (c)<--(:Screenshare)`;
+  }
+  query = `${query} RETURN c, ch.id AS ch`;
+  const driver = await dbo.getDB();
+  const { records, _ } = await driver.executeQuery(
+    query,
+    { user: parseInt(user), channel: parseInt(channel) },
+    { database: 'neo4j' },
+  );
+  const results = [];
+  records.forEach((record) => {
+    results.push({
+      id: record.get('c').properties.id,
+      channel: record.get('ch').low,
+      date: record.get('c').properties.date,
+    });
+  });
+  res.status(200).json({
+    status: 'Success',
+    result: {
+      calls: results,
+    },
   });
 });
 
