@@ -775,7 +775,7 @@ recordRoutes.route('/notifications/:id').get(async (req, res) => {
   const { id } = req.params;
   const driver = await dbo.getDB();
   const { records } = await driver.executeQuery(
-    'MATCH (u:User{id: 8})-[r]->(n:Notification) RETURN n, r.read AS r',
+    'MATCH (:User{id: $id})-[r]->(n:Notification) RETURN n, r.read AS r',
     { id: parseInt(id) },
     { database: 'neo4j' },
   );
@@ -793,6 +793,28 @@ recordRoutes.route('/notifications/:id').get(async (req, res) => {
     result: {
       file: results,
     },
+  });
+});
+
+recordRoutes.route('/notifications/:user').put(async (req, res) => {
+  const { user } = req.params;
+  const { notification } = req.query;
+  let query = '';
+  if (notification) {
+    query = 'MATCH (:User{id: $user})-[r]->(n:Notification{id: $notification}) SET r.read = true';
+  } else {
+    query = 'MATCH (:User{id: $user})-[r]->(n:Notification) SET r.read = true';
+  }
+  const driver = await dbo.getDB();
+  const { summary } = await driver.executeQuery(
+    query,
+    { user: parseInt(user), notification: parseInt(notification) },
+    { database: 'neo4j' },
+  );
+  res.status(200).json({
+    status: 'Success',
+    result: `Set ${summary.counters.updates().propertiesSet} properties `
+    + `in ${summary.resultAvailableAfter} ms.`,
   });
 });
 
