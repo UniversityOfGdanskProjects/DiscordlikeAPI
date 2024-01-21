@@ -690,6 +690,7 @@ recordRoutes.route('/files/:id').get(async (req, res) => {
     user: records[0].get('u').low,
     channel: records[0].get('c').low,
     description: records[0].get('f').properties.description,
+    edited: records[0].get('f').properties.edited,
     file: records[0].get('f').properties.file,
   };
   res.status(200).json({
@@ -725,6 +726,7 @@ recordRoutes.route('/files').get(async (req, res) => {
       user: record.get('u').low,
       channel: record.get('c').low,
       description: record.get('f').properties.description,
+      edited: record.get('f').properties.edited,
       file: record.get('f').properties.file,
     });
   });
@@ -733,6 +735,23 @@ recordRoutes.route('/files').get(async (req, res) => {
     result: {
       files: results,
     },
+  });
+});
+
+recordRoutes.route('/files/:id').put(async (req, res) => {
+  const { id } = req.params;
+  const { description } = req.body;
+  console.log(description);
+  const driver = await dbo.getDB();
+  const { _, summary } = await driver.executeQuery(
+    'MATCH (f:File {id: $id}) SET f.description = $description, f.edited = $edited',
+    { id: parseInt(id), description, edited: true },
+    { database: 'neo4j' },
+  );
+  res.status(200).json({
+    status: 'Success',
+    result: `Set ${summary.counters.updates().propertiesSet} properties `
+            + `in ${summary.resultAvailableAfter} ms.`,
   });
 });
 
