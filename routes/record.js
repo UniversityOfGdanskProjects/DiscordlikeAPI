@@ -656,7 +656,6 @@ recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) =>
 
 recordRoutes.route('/files/:id').delete(async (req, res) => {
   const { id } = req.params;
-  console.log(id);
   const driver = await dbo.getDB();
   const { records, s } = await driver.executeQuery(
     'MATCH (f:File {id: $id}) RETURN f.name AS f',
@@ -673,6 +672,31 @@ recordRoutes.route('/files/:id').delete(async (req, res) => {
     status: 'Success',
     result: `Deleted ${summary.counters.updates().nodesDeleted} nodes `
     + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
+recordRoutes.route('/files/:id').get(async (req, res) => {
+  const { id } = req.params;
+  const driver = await dbo.getDB();
+  const { records, s } = await driver.executeQuery(
+    'MATCH (u:User)-->(f:File {id: $id})<--(c:Channel) RETURN f, u.id AS u, c.id AS c',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  const result = {
+    id: records[0].get('f').properties.id.low,
+    name: records[0].get('f').properties.name,
+    date: records[0].get('f').properties.date,
+    user: records[0].get('u').low,
+    channel: records[0].get('c').low,
+    description: records[0].get('f').properties.description,
+    file: records[0].get('f').properties.file,
+  };
+  res.status(200).json({
+    status: 'Success',
+    result: {
+      file: result,
+    },
   });
 });
 
