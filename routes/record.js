@@ -2,6 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const { log } = require('console');
 const upload = require('../upload');
 const dbo = require('../db/conn');
 
@@ -634,9 +635,10 @@ recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) =>
   const driver = await dbo.getDB();
   const { _, summary } = await driver.executeQuery(
     'MATCH (u:User {id: $user}), (c:Channel {id: $channel})'
-        + 'CREATE (u)-[:SEND]->(f:File {id: $id, date: $date, description: $description, file: $file, edited: false})<-[:HAS_FILES]-(c)',
+        + 'CREATE (u)-[:SEND]->(f:File {id: $id, name: $name, date: $date, description: $description, file: $file, edited: false})<-[:HAS_FILES]-(c)',
     {
       id: parseInt(id),
+      name: req.file.path,
       date: new Date(Date.now()).toISOString(),
       user: parseInt(user),
       channel: parseInt(channel),
@@ -649,6 +651,28 @@ recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) =>
     status: 'Success',
     result: `Created ${summary.counters.updates().nodesCreated} nodes `
             + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
+recordRoutes.route('/files/:id').delete(async (req, res) => {
+  const { id } = req.params;
+  console.log(id);
+  const driver = await dbo.getDB();
+  const { records, s } = await driver.executeQuery(
+    'MATCH (f:File {id: $id}) RETURN f.name AS f',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  const { r, summary } = await driver.executeQuery(
+    'MATCH (f:File {id: $id}) DETACH DELETE f',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  fs.unlinkSync(records[0].get('f'));
+  res.status(200).json({
+    status: 'Success',
+    result: `Deleted ${summary.counters.updates().nodesDeleted} nodes `
+    + `in ${summary.resultAvailableAfter} ms.`,
   });
 });
 

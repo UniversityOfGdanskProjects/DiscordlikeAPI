@@ -1,6 +1,7 @@
 /.vscode
 /.idea
 /neo4j
+/files
 
 # Git ignore z https://github.com/github/gitignore/blob/main/Node.gitignore
 # Logs
