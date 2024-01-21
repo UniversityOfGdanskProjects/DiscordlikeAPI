@@ -818,4 +818,19 @@ recordRoutes.route('/notifications/:user').put(async (req, res) => {
   });
 });
 
+recordRoutes.route('/notifications/:id').delete(async (req, res) => {
+  const { id } = req.params;
+  const driver = await dbo.getDB();
+  const { summary } = await driver.executeQuery(
+    'MATCH (n:Notification{id: $id}) DETACH DELETE n',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  res.status(200).json({
+    status: 'Success',
+    result: `Deleted ${summary.counters.updates().nodesDeleted} nodes `
+    + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
 module.exports = recordRoutes;
