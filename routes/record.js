@@ -362,6 +362,41 @@ recordRoutes.route('/messages/:id').put(async (req, res) => {
   });
 });
 
+recordRoutes.route('/messages').get(async (req, res) => {
+  const { channel, user } = req.query;
+  let query = 'MATCH (u:User)-->(m:Message)<--(c:Channel)';
+  if (channel) {
+    query = `${query}, (m)-->(:Channel {id: $channel})`;
+  }
+  if (user) {
+    query = `${query}, (m)<--(:User {id: $user})`;
+  }
+  query = `${query} RETURN m, u.id AS u, c.id AS c`;
+  const driver = await dbo.getDB();
+  const { records, _ } = await driver.executeQuery(
+    query,
+    { user: parseInt(user) },
+    { database: 'neo4j' },
+  );
+  const results = [];
+  records.forEach((record) => {
+    results.push({
+      id: record.get('m').properties.id.low,
+      user: record.get('u').low,
+      channel: record.get('c').low,
+      date: record.get('m').properties.date,
+      text: record.get('m').properties.text,
+      edited: record.get('m').properties.edited,
+    });
+  });
+  res.status(200).json({
+    status: 'Success',
+    result: {
+      channels: results,
+    },
+  });
+});
+
 recordRoutes.route('/calls').post(async (req, res) => {
   const { id, user, channel } = req.body;
   const driver = await dbo.getDB();
@@ -501,7 +536,6 @@ recordRoutes.route('/screenshares/:id').get(async (req, res) => {
     { id: parseInt(id) },
     { database: 'neo4j' },
   );
-  console.log(records);
   const results = {
     id: records[0].get('screenshare').properties.id,
     date: records[0].get('screenshare').properties.date,
