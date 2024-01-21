@@ -414,10 +414,14 @@ recordRoutes.route('/calls').post(async (req, res) => {
   const { id, user, channel } = req.body;
   const driver = await dbo.getDB();
   const { summary } = await driver.executeQuery(
-    'MATCH (u:User {id: $user}), (ch:Channel {id: $channel})'
-        + 'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch)',
+    'MATCH (u:User {id: $user}), (ch:Channel{id: $channel})\n'
+    + 'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch),\n'
+    + '(n:Notification {id: $notifId, text: $notif, date: $date, read: $read })<-[:SEND]-(c)\n'
+    + 'WITH c, n\n'
+    + 'MATCH (c)<--(:Channel)<--(a:User)\n'
+    + 'CREATE (a)-[:HAS_NOTIFICATION]->(n)',
     {
-      id: parseInt(id), date: new Date(Date.now()).toISOString(), user, channel,
+      id: parseInt(id), date: new Date(Date.now()).toISOString(), user, channel, notifId: parseInt(id), notif: `New message in channel ${channel}`, read: false,
     },
     { database: 'neo4j' },
   );
