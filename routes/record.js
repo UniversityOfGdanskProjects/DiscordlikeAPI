@@ -414,7 +414,7 @@ recordRoutes.route('/calls').post(async (req, res) => {
   const { id, user, channel } = req.body;
   const driver = await dbo.getDB();
   const { summary } = await driver.executeQuery(
-    'MATCH (u:User {id: $user}), (ch:Channel{id: $channel})\n'
+    'MATCH (u:User {id: $user})-->(ch:Channel{id: $channel})\n'
     + 'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch),\n'
     + '(n:Notification {id: $notifId, text: $notif, date: $date, read: $read })<-[:SEND]-(c)\n'
     + 'WITH c, n\n'
@@ -644,8 +644,12 @@ recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) =>
   const base64Image = `data:image/png;base64,${Buffer.from(image, 'binary').toString('base64')}`;
   const driver = await dbo.getDB();
   const { summary } = await driver.executeQuery(
-    'MATCH (u:User {id: $user}), (c:Channel {id: $channel})'
-        + 'CREATE (u)-[:SEND]->(f:File {id: $id, name: $name, date: $date, description: $description, file: $file, edited: false})<-[:HAS_FILES]-(c)',
+    'MATCH (u:User {id: $user}), (ch:Channel{id: $channel})\n'
+    + 'CREATE (u)-[:SEND]->(f:File {id: $id, name: $name, date: $date, description: $description, file: $file, edited: $edited})<-[:HAS_FILES]-(ch),\n'
+    + '(n:Notification {id: $notifId, text: $notif, date: $date, read: $edited })<-[:SEND]-(f)\n'
+    + 'WITH f, n\n'
+    + 'MATCH (f)<--(:Channel)<--(a:User)\n'
+    + 'CREATE (a)-[:HAS_NOTIFICATION]->(n)\n',
     {
       id: parseInt(id),
       name: req.file.path,
@@ -654,6 +658,9 @@ recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) =>
       channel: parseInt(channel),
       description,
       file: base64Image,
+      edited: false,
+      notifId: parseInt(id),
+      notif: `New file in ${channel}`,
     },
     { database: 'neo4j' },
   );
