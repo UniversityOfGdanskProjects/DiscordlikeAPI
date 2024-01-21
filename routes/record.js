@@ -302,10 +302,14 @@ recordRoutes.route('/messages').post(async (req, res) => {
   const date = new Date(Date.now()).toISOString();
   const driver = await dbo.getDB();
   const { _, summary } = await driver.executeQuery(
-    'MATCH (u:User {id: $user}), (c:Channel {id: $channel})'
-        + 'CREATE (u)-[:SEND]->(m:Message {id: $id, text: $text, date: $date, edited: $edited})<-[:HAS_MESSAGE]-(c)',
+    'MATCH (u:User {id: 3}), (c:Channel{id: 17})'
+    + 'CREATE (u)-[:SEND]->(m:Message {id: 2, text: $text, date: $date, edited: $new})<-[:HAS_MESSAGE]-(c), '
+    + '(n:Notification {id: 1, text: $notif, date: $date, read: $new })<-[:SEND]-(m) '
+    + 'WITH m, n '
+    + 'MATCH (m)<--(:Channel)<--(a:User) '
+    + 'CREATE (a)-[:HAS_NOTIFICATION]->(n)',
     {
-      id: parseInt(id), text, date, edited: false, user, channel,
+      id: parseInt(id), text, date, new: false, user, channel, notif: `New message in channel ${channel}`,
     },
     { database: 'neo4j' },
   );
@@ -741,7 +745,6 @@ recordRoutes.route('/files').get(async (req, res) => {
 recordRoutes.route('/files/:id').put(async (req, res) => {
   const { id } = req.params;
   const { description } = req.body;
-  console.log(description);
   const driver = await dbo.getDB();
   const { _, summary } = await driver.executeQuery(
     'MATCH (f:File {id: $id}) SET f.description = $description, f.edited = $edited',
