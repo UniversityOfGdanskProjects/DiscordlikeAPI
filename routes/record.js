@@ -5,13 +5,16 @@ const dbo = require('../db/conn');
 const recordRoutes = express.Router();
 
 recordRoutes.route('/users').get(async (req, res) => {
-  const { calls, channel } = req.query;
+  const { calls, channel, screenshare } = req.query;
   let query = 'MATCH (u:User)';
   if (calls) {
     query = `${query}, (u)-->(:Call)`;
   }
   if (channel) {
     query = `${query}, (u)-->(:Channel {id: $channel})`;
+  }
+  if (screenshare) {
+    query = `${query}, (u)-->(:Screenshare)`;
   }
   query = `${query} RETURN u`;
   const driver = await dbo.getDB();
