@@ -678,7 +678,7 @@ recordRoutes.route('/files/:id').delete(async (req, res) => {
 recordRoutes.route('/files/:id').get(async (req, res) => {
   const { id } = req.params;
   const driver = await dbo.getDB();
-  const { records, s } = await driver.executeQuery(
+  const { records } = await driver.executeQuery(
     'MATCH (u:User)-->(f:File {id: $id})<--(c:Channel) RETURN f, u.id AS u, c.id AS c',
     { id: parseInt(id) },
     { database: 'neo4j' },
@@ -696,6 +696,42 @@ recordRoutes.route('/files/:id').get(async (req, res) => {
     status: 'Success',
     result: {
       file: result,
+    },
+  });
+});
+
+recordRoutes.route('/files').get(async (req, res) => {
+  const { channel, user } = req.query;
+  let query = 'MATCH (c:Channel)-->(f:File)<--(u:User)';
+  if (channel) {
+    query = `${query}, (f)<--(:Channel {id: $channel})`;
+  }
+  if (user) {
+    query = `${query}, (f)<--(:User {id: $user})`;
+  }
+  query = `${query} RETURN f, c.id AS c, u.id AS u`;
+  const driver = await dbo.getDB();
+  const { records } = await driver.executeQuery(
+    query,
+    { user: parseInt(user), channel: parseInt(channel) },
+    { database: 'neo4j' },
+  );
+  const results = [];
+  records.forEach((record) => {
+    results.push({
+      id: record.get('f').properties.id.low,
+      name: record.get('f').properties.name,
+      date: record.get('f').properties.date,
+      user: record.get('u').low,
+      channel: record.get('c').low,
+      description: record.get('f').properties.description,
+      file: record.get('f').properties.file,
+    });
+  });
+  res.status(200).json({
+    status: 'Success',
+    result: {
+      files: results,
     },
   });
 });
