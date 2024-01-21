@@ -45,24 +45,39 @@ recordRoutes.route('/users').get(async (req, res) => {
 
 recordRoutes.route('/users').post(async (req, res) => {
   const {
-    name, id, password, isAdmin,
+    name, id, password,
   } = req.body;
   const driver = await dbo.getDB();
-  const { summary } = await driver.executeQuery(
-    'MERGE (u:User {id: $id, name: $name, password: $password, isAdmin: $isAdmin})',
+  const { records } = await driver.executeQuery(
+    'MATCH (u:User {name: $name}) RETURN u',
     {
       name,
       id: parseInt(id),
       password,
-      isAdmin,
     },
     { database: 'neo4j' },
   );
-  res.status(200).json({
-    status: 'Success',
-    result: `Created ${summary.counters.updates().nodesCreated} nodes `
-            + `in ${summary.resultAvailableAfter} ms.`,
-  });
+  if (records.length > 0) {
+    res.status(200).json({
+      status: 'Error',
+      result: 'This username already exists',
+    });
+  } else {
+    const { summary } = await driver.executeQuery(
+      'MERGE (u:User {id: $id, name: $name, password: $password, loggedIn: false})',
+      {
+        name,
+        id: parseInt(id),
+        password,
+      },
+      { database: 'neo4j' },
+    );
+    res.status(200).json({
+      status: 'Success',
+      result: `Created ${summary.counters.updates().nodesCreated} nodes `
+              + `in ${summary.resultAvailableAfter} ms.`,
+    });
+  }
 });
 
 recordRoutes.route('/users/:id').get(async (req, res) => {
@@ -831,6 +846,86 @@ recordRoutes.route('/notifications/:id').delete(async (req, res) => {
     result: `Deleted ${summary.counters.updates().nodesDeleted} nodes `
     + `in ${summary.resultAvailableAfter} ms.`,
   });
+});
+
+recordRoutes.route('/auth/login').post(async (req, res) => {
+  const { login, password } = req.body;
+  const driver = await dbo.getDB();
+  const { records } = await driver.executeQuery(
+    'MATCH (u:User {name: $login, password: $password}) RETURN u',
+    { login, password },
+    { database: 'neo4j' },
+  );
+  // console.log(records);
+  // res.send(records);
+  if (records.length > 0) {
+    const { summary } = await driver.executeQuery(
+      'MATCH (u:User {name: $login, password: $password}) SET u.loggedIn = true',
+      { login, password },
+      { database: 'neo4j' },
+    );
+    res.status(200).json({
+      status: 'Success',
+      result: `Successfully logged in as ${login} in ${summary.resultAvailableAfter} ms.`,
+    });
+  } else {
+    res.status(200).json({
+      status: 'Error',
+      result: 'Username or password incorrect',
+    });
+  }
+});
+
+recordRoutes.route('/auth/logout').post(async (req, res) => {
+  const { login } = req.body;
+  const driver = await dbo.getDB();
+  const { records } = await driver.executeQuery(
+    'MATCH (u:User {name: $login, loggedIn: true}) RETURN u',
+    { login },
+    { database: 'neo4j' },
+  );
+  if (records.length > 0) {
+    const { summary } = await driver.executeQuery(
+      'MATCH (u:User {name: $login}) SET u.loggedIn = false',
+      { login },
+      { database: 'neo4j' },
+    );
+    res.status(200).json({
+      status: 'Success',
+      result: `Successfully logged out as ${login} in ${summary.resultAvailableAfter} ms.`,
+    });
+  } else {
+    res.status(200).json({
+      status: 'Error',
+      result: 'Username incorrect or not logged in',
+    });
+  }
+});
+
+recordRoutes.route('/auth/password/reset').post(async (req, res) => {
+  const { login, password } = req.body;
+  const driver = await dbo.getDB();
+  const { records } = await driver.executeQuery(
+    'MATCH (u:User {name: $login}) RETURN u',
+    { login },
+    { database: 'neo4j' },
+  );
+  if (records.length > 0) {
+    const { summary } = await driver.executeQuery(
+      'MATCH (u:User {name: $login}) SET u.password = $password',
+      { login, password },
+      { database: 'neo4j' },
+    );
+    res.status(200).json({
+      status: 'Success',
+      result: `Successfully reseted password in ${summary.resultAvailableAfter} ms.`,
+    });
+  } else {
+    res.status(200).json({
+      status: 'Error',
+      result: 'Username incorrect',
+    });
+  }
 });
 
 module.exports = recordRoutes;
