@@ -1,5 +1,8 @@
 /* eslint-disable radix */
 const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const upload = require('../upload');
 const dbo = require('../db/conn');
 
 const recordRoutes = express.Router();
@@ -619,6 +622,33 @@ recordRoutes.route('/screenshares').get(async (req, res) => {
     result: {
       screenshares: results,
     },
+  });
+});
+
+recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) => {
+  const {
+    id, user, channel, description,
+  } = req.body;
+  const image = fs.readFileSync(req.file.path);
+  const base64Image = `data:image/png;base64,${Buffer.from(image, 'binary').toString('base64')}`;
+  const driver = await dbo.getDB();
+  const { _, summary } = await driver.executeQuery(
+    'MATCH (u:User {id: $user}), (c:Channel {id: $channel})'
+        + 'CREATE (u)-[:SEND]->(f:File {id: $id, date: $date, description: $description, file: $file, edited: false})<-[:HAS_FILES]-(c)',
+    {
+      id: parseInt(id),
+      date: new Date(Date.now()).toISOString(),
+      user: parseInt(user),
+      channel: parseInt(channel),
+      description,
+      file: base64Image,
+    },
+    { database: 'neo4j' },
+  );
+  res.status(200).json({
+    status: 'Success',
+    result: `Created ${summary.counters.updates().nodesCreated} nodes `
+            + `in ${summary.resultAvailableAfter} ms.`,
   });
 });
 
