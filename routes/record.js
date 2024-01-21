@@ -303,10 +303,10 @@ recordRoutes.route('/messages').post(async (req, res) => {
   const { summary } = await driver.executeQuery(
     'MATCH (u:User {id: $user})-->(c:Channel{id: $channel})\n'
     + 'CREATE (u)-[:SEND]->(m:Message {id: $messageId, text: $text, date: $date, edited: $edited})<-[:HAS_MESSAGE]-(c),\n'
-    + '(n:Notification {notifId: $notifId, text: $notif, date: $date, read: $edited})<-[:SEND]-(m)\n'
+    + '(n:Notification {id: $notifId, text: $notif, date: $date})<-[:SEND]-(m)\n'
     + 'WITH m, n\n'
     + 'MATCH (m)<--(:Channel)<--(a:User)\n'
-    + 'CREATE (a)-[:HAS_NOTIFICATION]->(n)',
+    + 'CREATE (a)-[:HAS_NOTIFICATION {read: $edited}]->(n)',
     {
       messageId: parseInt(id), text, date, edited: false, user: parseInt(user), channel: parseInt(channel), notifId: parseInt(id), notif: `New message in channel ${channel}`,
     },
@@ -416,12 +416,12 @@ recordRoutes.route('/calls').post(async (req, res) => {
   const { summary } = await driver.executeQuery(
     'MATCH (u:User {id: $user})-->(ch:Channel{id: $channel})\n'
     + 'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch),\n'
-    + '(n:Notification {id: $notifId, text: $notif, date: $date, read: $read })<-[:SEND]-(c)\n'
+    + '(n:Notification {id: $notifId, text: $notif, date: $date })<-[:SEND]-(c)\n'
     + 'WITH c, n\n'
     + 'MATCH (c)<--(:Channel)<--(a:User)\n'
-    + 'CREATE (a)-[:HAS_NOTIFICATION]->(n)',
+    + 'CREATE (a)-[:HAS_NOTIFICATION {read: $read}]->(n)',
     {
-      id: parseInt(id), date: new Date(Date.now()).toISOString(), user, channel, notifId: parseInt(id), notif: `New message in channel ${channel}`, read: false,
+      id: parseInt(id), date: new Date(Date.now()).toISOString(), user, channel, notifId: parseInt(id), notif: `New call in channel ${channel}`, read: false,
     },
     { database: 'neo4j' },
   );
@@ -550,7 +550,7 @@ recordRoutes.route('/screenshares').post(async (req, res) => {
   const { id, user, call } = req.body;
   const driver = await dbo.getDB();
   const { summary } = await driver.executeQuery(
-    'MATCH (u:User {id: $user}), (c:Call {id: $call})'
+    'MATCH (u:User {id: $user})-->(:Channel)-->(c:Call {id: $call})'
         + 'CREATE (u)-[:STARTED]->(s:Screenshare {id: $id, date: $date})<-[:HAS_SCREENSHARE]-(c)',
     {
       id: parseInt(id), date: new Date(Date.now()).toISOString(), user, call,
@@ -644,12 +644,12 @@ recordRoutes.post('/files', [cors(), upload.single('file')], async (req, res) =>
   const base64Image = `data:image/png;base64,${Buffer.from(image, 'binary').toString('base64')}`;
   const driver = await dbo.getDB();
   const { summary } = await driver.executeQuery(
-    'MATCH (u:User {id: $user}), (ch:Channel{id: $channel})\n'
+    'MATCH (u:User {id: $user})-->(ch:Channel{id: $channel})\n'
     + 'CREATE (u)-[:SEND]->(f:File {id: $id, name: $name, date: $date, description: $description, file: $file, edited: $edited})<-[:HAS_FILES]-(ch),\n'
-    + '(n:Notification {id: $notifId, text: $notif, date: $date, read: $edited })<-[:SEND]-(f)\n'
+    + '(n:Notification {id: $notifId, text: $notif, date: $date })<-[:SEND]-(f)\n'
     + 'WITH f, n\n'
     + 'MATCH (f)<--(:Channel)<--(a:User)\n'
-    + 'CREATE (a)-[:HAS_NOTIFICATION]->(n)\n',
+    + 'CREATE (a)-[:HAS_NOTIFICATION { read: $edited }]->(n)\n',
     {
       id: parseInt(id),
       name: req.file.path,
@@ -768,6 +768,31 @@ recordRoutes.route('/files/:id').put(async (req, res) => {
     status: 'Success',
     result: `Set ${summary.counters.updates().propertiesSet} properties `
             + `in ${summary.resultAvailableAfter} ms.`,
+  });
+});
+
+recordRoutes.route('/notifications/:id').get(async (req, res) => {
+  const { id } = req.params;
+  const driver = await dbo.getDB();
+  const { records } = await driver.executeQuery(
+    'MATCH (u:User{id: 8})-[r]->(n:Notification) RETURN n, r.read AS r',
+    { id: parseInt(id) },
+    { database: 'neo4j' },
+  );
+  const results = [];
+  records.forEach((record) => {
+    results.push({
+      id: record.get('n').properties.id.low,
+      date: record.get('n').properties.date,
+      text: record.get('n').properties.text,
+      edited: record.get('r'),
+    });
+  });
+  res.status(200).json({
+    status: 'Success',
+    result: {
+      file: results,
+    },
   });
 });
 
