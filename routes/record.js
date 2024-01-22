@@ -484,52 +484,51 @@ recordRoutes.route('/messages').get(async (req, res) => {
   query = `${query}(m:Message)`;
   query = channel ? `${query}<--(c:Channel {id: $channel})` : `${query}<--(c:Channel)`;
   query = `${query} RETURN m, u.id AS u, c.id AS c`;
-  // try {
-  const driver = await dbo.getDB();
-  const { records } = await driver.executeQuery(
-    query,
-    { user, channel },
-    { database: 'neo4j' },
-  );
-  console.log(records);
-  const results = [];
-  records.forEach((record) => {
-    results.push({
-      id: record.get('m').properties.id,
-      user: record.get('u'),
-      channel: record.get('c'),
-      date: record.get('m').properties.date,
-      text: record.get('m').properties.text,
-      edited: record.get('m').properties.edited,
+  try {
+    const driver = await dbo.getDB();
+    const { records } = await driver.executeQuery(
+      query,
+      { user, channel },
+      { database: 'neo4j' },
+    );
+    const results = [];
+    records.forEach((record) => {
+      results.push({
+        id: record.get('m').properties.id,
+        user: record.get('u'),
+        channel: record.get('c'),
+        date: record.get('m').properties.date,
+        text: record.get('m').properties.text,
+        edited: record.get('m').properties.edited,
+      });
     });
-  });
-  res.status(200).json({
-    status: 'Success',
-    result: {
-      messages: results,
-    },
-  });
-  // } catch (err) {
-  //   res.json({
-  //     status: 'Error',
-  //     message: err,
-  //   });
-  // }
+    res.status(200).json({
+      status: 'Success',
+      result: {
+        messages: results,
+      },
+    });
+  } catch (err) {
+    res.json({
+      status: 'Error',
+      message: err,
+    });
+  }
 });
 
 recordRoutes.route('/calls').post(async (req, res) => {
-  const { user, channel } = req.body;
+  const { user, channel, name } = req.body;
   try {
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
       'MATCH (u:User {id: $user})-->(ch:Channel{id: $channel})\n'
-    + 'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date})<-[:HAS_CALLS]-(ch),\n'
+    + 'CREATE (u)-[:JOINED]->(c:Call {id: $id, date: $date, name: $name})<-[:HAS_CALLS]-(ch),\n'
     + '(n:Notification {id: $notifId, text: $notif, date: $date })<-[:SEND]-(c)\n'
     + 'WITH c, n\n'
     + 'MATCH (c)<--(:Channel)<--(a:User)\n'
     + 'CREATE (a)-[:HAS_NOTIFICATION {read: $read}]->(n)',
       {
-        id: uuidv4(), date: new Date(Date.now()).toISOString(), user, channel, notifId: uuidv4(), notif: `New call in channel ${channel}`, read: false,
+        id: uuidv4(), date: new Date(Date.now()).toISOString(), user, channel, name, notifId: uuidv4(), notif: `New call in channel ${channel}`, read: false,
       },
       { database: 'neo4j' },
     );
@@ -537,6 +536,29 @@ recordRoutes.route('/calls').post(async (req, res) => {
       status: 'Success',
       result: `Created ${summary.counters.updates().nodesCreated} nodes `
             + `in ${summary.resultAvailableAfter} ms.`,
+    });
+  } catch (err) {
+    res.json({
+      status: 'Error',
+      message: err,
+    });
+  }
+});
+
+recordRoutes.route('/calls/:id').put(async (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  try {
+    const driver = await dbo.getDB();
+    const { summary } = await driver.executeQuery(
+      'MATCH (c:Call {id: $id}) SET c.name = $name',
+      { id, name },
+      { database: 'neo4j' },
+    );
+    res.status(200).json({
+      status: 'Success',
+      result: `Set ${summary.counters.updates().propertiesSet} properties `
+                + `in ${summary.resultAvailableAfter} ms.`,
     });
   } catch (err) {
     res.json({
@@ -664,6 +686,7 @@ recordRoutes.route('/calls').get(async (req, res) => {
     records.forEach((record) => {
       results.push({
         id: record.get('c').properties.id,
+        name: record.get('c').properties.name,
         // channel: record.get('ch'),
         date: record.get('c').properties.date,
       });
@@ -683,14 +706,14 @@ recordRoutes.route('/calls').get(async (req, res) => {
 });
 
 recordRoutes.route('/screenshares').post(async (req, res) => {
-  const { user, call } = req.body;
+  const { user, call, name } = req.body;
   try {
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
       'MATCH (u:User {id: $user})-->(:Channel)-->(c:Call {id: $call})'
-        + 'CREATE (u)-[:STARTED]->(s:Screenshare {id: $id, date: $date})<-[:HAS_SCREENSHARE]-(c)',
+        + 'CREATE (u)-[:STARTED]->(s:Screenshare {id: $id, date: $date, name: $name})<-[:HAS_SCREENSHARE]-(c)',
       {
-        id: uuidv4(), date: new Date(Date.now()).toISOString(), user, call,
+        id: uuidv4(), date: new Date(Date.now()).toISOString(), user, call, name,
       },
       { database: 'neo4j' },
     );
@@ -729,6 +752,29 @@ recordRoutes.route('/screenshares/:id').delete(async (req, res) => {
   }
 });
 
+recordRoutes.route('/screenshares/:id').put(async (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  try {
+    const driver = await dbo.getDB();
+    const { summary } = await driver.executeQuery(
+      'MATCH (c:Screenshare {id: $id}) SET c.name = $name',
+      { id, name },
+      { database: 'neo4j' },
+    );
+    res.status(200).json({
+      status: 'Success',
+      result: `Set ${summary.counters.updates().propertiesSet} properties `
+                + `in ${summary.resultAvailableAfter} ms.`,
+    });
+  } catch (err) {
+    res.json({
+      status: 'Error',
+      message: err,
+    });
+  }
+});
+
 recordRoutes.route('/screenshares/:id').get(async (req, res) => {
   const { id } = req.params;
   try {
@@ -741,6 +787,7 @@ recordRoutes.route('/screenshares/:id').get(async (req, res) => {
     );
     const results = {
       id: records[0].get('screenshare').properties.id,
+      name: records[0].get('screenshare').properties.name,
       date: records[0].get('screenshare').properties.date,
       call: records[0].get('call'),
       user: records[0].get('user'),
@@ -781,6 +828,7 @@ recordRoutes.route('/screenshares').get(async (req, res) => {
     records.forEach((record) => {
       results.push({
         id: record.get('s').properties.id,
+        name: record.get('s').properties.name,
         call: record.get('c'),
         channel: record.get('ch'),
         date: record.get('s').properties.date,
