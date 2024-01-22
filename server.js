@@ -7,7 +7,14 @@
   const app = express();
   app.use(cors());
   app.use(express.json());
-  app.use(require('./routes/record'));
+  app.use(require('./routes/auth'));
+  app.use(require('./routes/calls'));
+  app.use(require('./routes/channels'));
+  app.use(require('./routes/files'));
+  app.use(require('./routes/messages'));
+  app.use(require('./routes/notifications'));
+  app.use(require('./routes/screenshares'));
+  app.use(require('./routes/users'));
 
   const dbo = require('./db/conn');
 
