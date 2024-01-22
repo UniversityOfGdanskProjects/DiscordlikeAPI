@@ -806,16 +806,11 @@ recordRoutes.route('/screenshares/:id').get(async (req, res) => {
 
 recordRoutes.route('/screenshares').get(async (req, res) => {
   const { channel, user, call } = req.query;
-  let query = 'MATCH (ch:Channel)-->(c:Call)-->(s:Screenshare)';
-  if (channel) {
-    query = `${query}, (s)<--(c)<--(:Channel {id: $channel})`;
-  }
-  if (user) {
-    query = `${query}, (s)<--(:User {id: $user})`;
-  }
-  if (call) {
-    query = `${query}, (s)<--(:Call {id: $call})`;
-  }
+  let query = 'MATCH';
+  query = user ? `${query} (u:User { id: $user })-->` : `${query} (:User)-->`;
+  query = `${query}(s:Screenshare)`;
+  query = call ? `${query}<--(c:Call { id: $call})` : `${query}<--(c:Call)`;
+  query = channel ? `${query}<--(ch:Channel { id: $channel })` : `${query}<--(ch:Channel)`;
   query = `${query} RETURN s, ch.id AS ch, c.id AS c`;
   try {
     const driver = await dbo.getDB();
@@ -953,13 +948,10 @@ recordRoutes.route('/files/:id').get(async (req, res) => {
 
 recordRoutes.route('/files').get(async (req, res) => {
   const { channel, user } = req.query;
-  let query = 'MATCH (c:Channel)-->(f:File)<--(u:User)';
-  if (channel) {
-    query = `${query}, (f)<--(:Channel {id: $channel})`;
-  }
-  if (user) {
-    query = `${query}, (f)<--(:User {id: $user})`;
-  }
+  let query = 'MATCH ';
+  query = channel ? `${query}(c:Channel { id: $channel })-->` : `${query}(c:Channel)-->`;
+  query = `${query}(f:File)`;
+  query = user ? `${query}<--(u:User { id : $user})` : `${query}<--(u:User)`;
   query = `${query} RETURN f, c.id AS c, u.id AS u`;
   try {
     const driver = await dbo.getDB();
