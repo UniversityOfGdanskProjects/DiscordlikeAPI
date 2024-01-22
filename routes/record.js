@@ -233,7 +233,7 @@ recordRoutes.route('/channels/:id').get(async (req, res) => {
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
-      'MATCH (c:Channel {id: $id}) RETURN c',
+      'MATCH (c:Channel {id: $id})<--(u:User) RETURN c, u',
       { id },
       { database: 'neo4j' },
     );
@@ -241,6 +241,10 @@ recordRoutes.route('/channels/:id').get(async (req, res) => {
       const result = {
         id: records[0].get('c').properties.id,
         name: records[0].get('c').properties.name,
+        users: records.map((record) => ({
+          id: record.get('u').properties.id,
+          name: record.get('u').properties.name,
+        })),
       };
       res.status(200).json({
         status: 'Success',
@@ -426,8 +430,8 @@ recordRoutes.route('/messages/:id').get(async (req, res) => {
       text: records[0].get('m').properties.text,
       date: records[0].get('m').properties.date,
       edited: records[0].get('m').properties.edited,
-      user: records[0].get('u').properties.id ? records[0].get('u').properties.id : 'User deleated',
-      channel: records[0].get('c').properties.id.low,
+      user: records[0].get('u').properties.id ? { id: records[0].get('u').properties.id, name: records[0].get('u').properties.name } : 'User deleted',
+      channel: { id: records[0].get('c').properties.id, name: records[0].get('c').properties.name },
     };
     res.status(200).json({
       status: 'Success',
@@ -492,7 +496,7 @@ recordRoutes.route('/messages').get(async (req, res) => {
   query = user ? `${query}(u:User {id: $user})-->` : `${query}(u:User)-->`;
   query = `${query}(m:Message)`;
   query = channel ? `${query}<--(c:Channel {id: $channel})` : `${query}<--(c:Channel)`;
-  query = `${query} RETURN m, u.id AS u, c.id AS c`;
+  query = `${query} RETURN m, u, c`;
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
@@ -504,8 +508,8 @@ recordRoutes.route('/messages').get(async (req, res) => {
     records.forEach((record) => {
       results.push({
         id: record.get('m').properties.id,
-        user: record.get('u'),
-        channel: record.get('c'),
+        user: { id: record.get('u').properties.id, name: record.get('u').properties.name },
+        channel: { id: record.get('c').properties.id, name: record.get('c').properties.name },
         date: record.get('m').properties.date,
         text: record.get('m').properties.text,
         edited: record.get('m').properties.edited,
@@ -605,10 +609,10 @@ recordRoutes.route('/calls/:id').get(async (req, res) => {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
       'MATCH (u:User)-[:JOINED]->(c:Call {id: $id})<-[:HAS_CALLS]-(ch:Channel)\n'
-        + 'WITH u.id as coll, c AS call, ch AS channel\n'
+        + 'WITH u as coll, c AS call, ch AS channel\n'
         + 'UNWIND coll AS x\n'
         + 'WITH x, call, channel\n'
-        + 'WITH DISTINCT x, channel.id AS channel, call AS call\n'
+        + 'WITH DISTINCT x, channel AS channel, call AS call\n'
         + 'RETURN collect(x) AS users, channel, call',
       { id },
       { database: 'neo4j' },
@@ -617,7 +621,7 @@ recordRoutes.route('/calls/:id').get(async (req, res) => {
       id: records[0].get('call').properties.id,
       date: records[0].get('call').properties.date,
       channel: records[0].get('channel').properties,
-      users: records[0].get('users'),
+      users: records[0].get('users').map((record) => ({ id: record.properties.id, name: record.properties.name })),
     };
     res.status(200).json({
       status: 'Success',
@@ -683,7 +687,7 @@ recordRoutes.route('/calls').get(async (req, res) => {
   query = `${query}(c:Call)`;
   query = channel ? `${query}<--(ch:Channel {id: $channel})` : `${query}<--(ch:Channel)`;
   query = screenshare ? `${query}, (c)-->(:Screenshare)` : query;
-  query = `${query} RETURN c`;
+  query = `${query} RETURN c, ch`;
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
@@ -696,7 +700,7 @@ recordRoutes.route('/calls').get(async (req, res) => {
       results.push({
         id: record.get('c').properties.id,
         name: record.get('c').properties.name,
-        // channel: record.get('ch'),
+        channel: { id: record.get('ch').properties.id, name: record.get('ch').properties.name },
         date: record.get('c').properties.date,
       });
     });
@@ -790,7 +794,7 @@ recordRoutes.route('/screenshares/:id').get(async (req, res) => {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
       'MATCH (u:User)-[:STARTED]->(s:Screenshare {id: $id})<-[:HAS_SCREENSHARE]-(c:Call)\n'
-        + 'RETURN u.id AS user, s AS screenshare, c.id AS call',
+        + 'RETURN u AS user, s AS screenshare, c AS call',
       { id },
       { database: 'neo4j' },
     );
@@ -798,8 +802,8 @@ recordRoutes.route('/screenshares/:id').get(async (req, res) => {
       id: records[0].get('screenshare').properties.id,
       name: records[0].get('screenshare').properties.name,
       date: records[0].get('screenshare').properties.date,
-      call: records[0].get('call'),
-      user: records[0].get('user'),
+      call: { id: records[0].get('call').properties.id, name: records[0].get('call').properties.name },
+      user: { id: records[0].get('user').properties.id, name: records[0].get('user').properties.name },
     };
     res.status(200).json({
       status: 'Success',
@@ -820,7 +824,7 @@ recordRoutes.route('/screenshares').get(async (req, res) => {
   query = `${query}(s:Screenshare)`;
   query = call ? `${query}<--(c:Call { id: $call})` : `${query}<--(c:Call)`;
   query = channel ? `${query}<--(ch:Channel { id: $channel })` : `${query}<--(ch:Channel)`;
-  query = `${query} RETURN s, ch.id AS ch, c.id AS c`;
+  query = `${query} RETURN s, ch, c`;
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
@@ -833,8 +837,8 @@ recordRoutes.route('/screenshares').get(async (req, res) => {
       results.push({
         id: record.get('s').properties.id,
         name: record.get('s').properties.name,
-        call: record.get('c'),
-        channel: record.get('ch'),
+        call: { id: record.get('c').properties.id, name: record.get('c').properties.name },
+        channel: { id: record.get('ch').properties.id, name: record.get('ch').properties.name },
         date: record.get('s').properties.date,
       });
     });
@@ -927,7 +931,7 @@ recordRoutes.route('/files/:id').get(async (req, res) => {
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
-      'MATCH (u:User)-->(f:File {id: $id})<--(c:Channel) RETURN f, u.id AS u, c.id AS c',
+      'MATCH (u:User)-->(f:File {id: $id})<--(c:Channel) RETURN f, u, c',
       { id },
       { database: 'neo4j' },
     );
@@ -935,8 +939,8 @@ recordRoutes.route('/files/:id').get(async (req, res) => {
       id: records[0].get('f').properties.id,
       name: records[0].get('f').properties.name,
       date: records[0].get('f').properties.date,
-      user: records[0].get('u'),
-      channel: records[0].get('c'),
+      user: { id: records[0].get('u').properties.id, name: records[0].get('u').properties.name },
+      channel: { id: records[0].get('c').properties.id, name: records[0].get('c').properties.name },
       description: records[0].get('f').properties.description,
       edited: records[0].get('f').properties.edited,
       file: records[0].get('f').properties.file,
@@ -961,7 +965,7 @@ recordRoutes.route('/files').get(async (req, res) => {
   query = channel ? `${query}(c:Channel { id: $channel })-->` : `${query}(c:Channel)-->`;
   query = `${query}(f:File)`;
   query = user ? `${query}<--(u:User { id : $user})` : `${query}<--(u:User)`;
-  query = `${query} RETURN f, c.id AS c, u.id AS u`;
+  query = `${query} RETURN f, c, u`;
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
@@ -975,11 +979,11 @@ recordRoutes.route('/files').get(async (req, res) => {
         id: record.get('f').properties.id,
         name: record.get('f').properties.name,
         date: record.get('f').properties.date,
-        user: record.get('u'),
-        channel: record.get('c'),
+        user: { id: records[0].get('u').properties.id, name: records[0].get('u').properties.name },
+        channel: { id: records[0].get('c').properties.id, name: records[0].get('c').properties.name },
         description: record.get('f').properties.description,
         edited: record.get('f').properties.edited,
-        file: record.get('f').properties.file,
+        // file: record.get('f').properties.file,
       });
     });
     res.status(200).json({
