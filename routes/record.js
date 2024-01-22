@@ -33,9 +33,9 @@ recordRoutes.route('/users').get(async (req, res) => {
     records.forEach((record) => {
       const { id } = record.get('u').properties;
       results.push({
-        id: id.low ? id.low : id,
+        id,
         name: record.get('u').properties.name,
-        isAdmin: record.get('u').properties.isAdmin,
+        email: record.get('u').properties.email,
       });
     });
     res.status(200).json({
@@ -54,7 +54,7 @@ recordRoutes.route('/users').get(async (req, res) => {
 
 recordRoutes.route('/users').post(async (req, res) => {
   const {
-    name, password,
+    name, password, email,
   } = req.body;
   try {
     const driver = await dbo.getDB();
@@ -72,11 +72,12 @@ recordRoutes.route('/users').post(async (req, res) => {
       });
     } else {
       const { summary } = await driver.executeQuery(
-        'MERGE (u:User {id: $id, name: $name, password: $password, loggedIn: false})',
+        'MERGE (u:User {id: $id, name: $name, password: $password, email : $email, loggedIn: false})',
         {
           name,
           id: uuidv4(),
           password,
+          email,
         },
         { database: 'neo4j' },
       );
@@ -102,7 +103,7 @@ recordRoutes.route('/users/:id').get(async (req, res) => {
       'MATCH (u:User {id: $id})\n'
           + 'OPTIONAL MATCH (u)-[:IS_IN]->(ch:Channel)\n'
           + 'OPTIONAL MATCH (u)-[:JOINED]-(c:Call)\n'
-          + 'RETURN u AS user, ch.id AS channels, c.id AS call',
+          + 'RETURN u AS user, ch AS channels, c AS call',
       { id },
       { database: 'neo4j' },
     );
@@ -110,9 +111,13 @@ recordRoutes.route('/users/:id').get(async (req, res) => {
       const result = {
         id,
         name: records[0].get('user').properties.name,
-        password: records[0].get('user').properties.password,
-        channels: records.map((record) => record.get('channels')),
-        activity: records[0].get('call') ? `In call ${records[0].get('call')}` : 'No activity',
+        password: records[0].get('user').properties.loggedIn ? records[0].get('user').properties.password : undefined,
+        email: records[0].get('user').properties.email,
+        channels: records.map((record) => ({
+          id: record.get('channels').properties.id,
+          name: record.get('channels').properties.name,
+        })),
+        activity: records[0].get('call') ? `In call ${records[0].get('call').properties.name}, id: ${records[0].get('call').properties.id}` : 'No activity',
       };
       res.status(200).json({
         status: 'Success',
@@ -158,13 +163,17 @@ recordRoutes.route('/users/:id').delete(async (req, res) => {
 
 recordRoutes.route('/users/:id').put(async (req, res) => {
   const { id } = req.params;
-  const { name } = req.body;
+  const { name, email } = req.body;
+  let query = 'MATCH (u:User {id: $id}) SET ';
+  query = name ? `${query} u.name = $name` : query;
+  query = (name && email) ? `${query},` : query;
+  query = email ? `${query} u.email = $email` : query;
   try {
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
-      'MATCH (u:User {id: $id}) SET u.name = $name',
+      query,
       {
-        id, name,
+        id, name, email,
       },
       { database: 'neo4j' },
     );
@@ -1171,12 +1180,12 @@ recordRoutes.route('/auth/logout').post(async (req, res) => {
 });
 
 recordRoutes.route('/auth/password/reset').post(async (req, res) => {
-  const { login, password } = req.body;
+  const { login, email, password } = req.body;
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
-      'MATCH (u:User {name: $login}) RETURN u',
-      { login },
+      'MATCH (u:User {name: $login, email: $email}) RETURN u',
+      { login, email },
       { database: 'neo4j' },
     );
     if (records.length > 0) {
@@ -1192,7 +1201,7 @@ recordRoutes.route('/auth/password/reset').post(async (req, res) => {
     } else {
       res.status(200).json({
         status: 'Error',
-        result: 'Username incorrect',
+        result: 'Username or email incorrect',
       });
     }
   } catch (err) {
