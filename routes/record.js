@@ -26,7 +26,7 @@ recordRoutes.route('/users').get(async (req, res) => {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
       query,
-      { channel: parseInt(channel) },
+      { channel },
       { database: 'neo4j' },
     );
     const results = [];
@@ -159,14 +159,10 @@ recordRoutes.route('/users/:id').delete(async (req, res) => {
 recordRoutes.route('/users/:id').put(async (req, res) => {
   const { id } = req.params;
   const { name } = req.body;
-  let query = 'MATCH (u:User {id: $id})';
-  if (name) {
-    query = `${query} SET u.name = $name`;
-  }
   try {
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
-      query,
+      'MATCH (u:User {id: $id}) SET u.name = $name',
       {
         id, name,
       },
@@ -306,19 +302,12 @@ recordRoutes.route('/channels/:id').delete(async (req, res) => {
 
 recordRoutes.route('/channels/:id/users').post(async (req, res) => {
   const { id } = req.params;
-  const { users } = req.body;
+  const { user } = req.body;
   try {
-    const query = users.reduce((acc, curr, i) => `${acc}, (u${i}:User {id: ${curr}})`, 'MATCH (c:Channel {id: $id})');
-    const queryFinal = users.reduce((acc, curr, i) => {
-      if (i !== 0) {
-        return `${acc}, (u${i})-[:IS_IN]->(c)`;
-      }
-      return `${acc} (u${i})-[:IS_IN]->(c)`;
-    }, `${query}\nCREATE`);
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
-      queryFinal,
-      { id },
+      'MATCH (c:Channel {id: $id}), (u:User {id: $user}) CREATE (u)-[:IS_IN]->(c)',
+      { id, user },
       { database: 'neo4j' },
     );
     res.status(200).json({
@@ -334,7 +323,7 @@ recordRoutes.route('/channels/:id/users').post(async (req, res) => {
   }
 });
 
-recordRoutes.route('/channels/:channelId/users/:userId').delete(async (req, res) => {
+recordRoutes.route('/channels/:channel/users/:user').delete(async (req, res) => {
   const { channel, user } = req.params;
   try {
     const driver = await dbo.getDB();
@@ -490,44 +479,42 @@ recordRoutes.route('/messages/:id').put(async (req, res) => {
 
 recordRoutes.route('/messages').get(async (req, res) => {
   const { channel, user } = req.query;
-  let query = 'MATCH (u:User)-->(m:Message)<--(c:Channel)';
-  if (channel) {
-    query = `${query}, (m)-->(:Channel {id: $channel})`;
-  }
-  if (user) {
-    query = `${query}, (m)<--(:User {id: $user})`;
-  }
+  let query = 'MATCH';
+  query = user ? `${query}(u:User {id: $user})-->` : `${query}(u:User)-->`;
+  query = `${query}(m:Message)`;
+  query = channel ? `${query}<--(c:Channel {id: $channel})` : `${query}<--(c:Channel)`;
   query = `${query} RETURN m, u.id AS u, c.id AS c`;
-  try {
-    const driver = await dbo.getDB();
-    const { records } = await driver.executeQuery(
-      query,
-      { user, channel },
-      { database: 'neo4j' },
-    );
-    const results = [];
-    records.forEach((record) => {
-      results.push({
-        id: record.get('m').properties.id,
-        user: record.get('u'),
-        channel: record.get('c'),
-        date: record.get('m').properties.date,
-        text: record.get('m').properties.text,
-        edited: record.get('m').properties.edited,
-      });
+  // try {
+  const driver = await dbo.getDB();
+  const { records } = await driver.executeQuery(
+    query,
+    { user, channel },
+    { database: 'neo4j' },
+  );
+  console.log(records);
+  const results = [];
+  records.forEach((record) => {
+    results.push({
+      id: record.get('m').properties.id,
+      user: record.get('u'),
+      channel: record.get('c'),
+      date: record.get('m').properties.date,
+      text: record.get('m').properties.text,
+      edited: record.get('m').properties.edited,
     });
-    res.status(200).json({
-      status: 'Success',
-      result: {
-        messages: results,
-      },
-    });
-  } catch (err) {
-    res.json({
-      status: 'Error',
-      message: err,
-    });
-  }
+  });
+  res.status(200).json({
+    status: 'Success',
+    result: {
+      messages: results,
+    },
+  });
+  // } catch (err) {
+  //   res.json({
+  //     status: 'Error',
+  //     message: err,
+  //   });
+  // }
 });
 
 recordRoutes.route('/calls').post(async (req, res) => {
@@ -615,19 +602,12 @@ recordRoutes.route('/calls/:id').get(async (req, res) => {
 
 recordRoutes.route('/calls/:id/users').post(async (req, res) => {
   const { id } = req.params;
-  const { users } = req.body;
-  const query = users.reduce((acc, curr, i) => `${acc}, (u${i}:User {id: ${curr}})`, 'MATCH (c:Call {id: $id})');
-  const queryFinal = users.reduce((acc, curr, i) => {
-    if (i !== 0) {
-      return `${acc}, (u${i})-[:JOINED]->(c)`;
-    }
-    return `${acc} (u${i})-[:JOINED]->(c)`;
-  }, `${query}\nCREATE`);
+  const { user } = req.body;
   try {
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
-      queryFinal,
-      { id },
+      'MATCH (u:User {id: $user})-->(:Channel)-->(c:Call{id: $id}) CREATE (u)-[:JOINED]->(c)',
+      { id, user },
       { database: 'neo4j' },
     );
     res.status(200).json({
@@ -643,7 +623,7 @@ recordRoutes.route('/calls/:id/users').post(async (req, res) => {
   }
 });
 
-recordRoutes.route('/calls/:callId/users/:userId').delete(async (req, res) => {
+recordRoutes.route('/calls/:call/users/:user').delete(async (req, res) => {
   const { call, user } = req.params;
   try {
     const driver = await dbo.getDB();
@@ -667,29 +647,24 @@ recordRoutes.route('/calls/:callId/users/:userId').delete(async (req, res) => {
 
 recordRoutes.route('/calls').get(async (req, res) => {
   const { channel, user, screenshare } = req.query;
-  let query = 'MATCH (ch:Channel)-->(c:Call)';
-  if (channel) {
-    query = `${query}, (c)<--(:Channel {id: $channel})`;
-  }
-  if (user) {
-    query = `${query}, (c)<--(:User {id: $user})`;
-  }
-  if (screenshare) {
-    query = `${query}, (c)<--(:Screenshare)`;
-  }
-  query = `${query} RETURN c, ch.id AS ch`;
+  let query = 'MATCH';
+  query = user ? `${query}(u:User {id: $user})-->` : `${query}`;
+  query = `${query}(c:Call)`;
+  query = channel ? `${query}<--(ch:Channel {id: $channel})` : `${query}<--(ch:Channel)`;
+  query = screenshare ? `${query}, (c)-->(:Screenshare)` : query;
+  query = `${query} RETURN c`;
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
       query,
-      { user, channel },
+      { user, channel, screenshare },
       { database: 'neo4j' },
     );
     const results = [];
     records.forEach((record) => {
       results.push({
         id: record.get('c').properties.id,
-        channel: record.get('ch'),
+        // channel: record.get('ch'),
         date: record.get('c').properties.date,
       });
     });
@@ -995,13 +970,12 @@ recordRoutes.route('/files/:id').put(async (req, res) => {
   }
 });
 
-recordRoutes.route('/notifications/:id').get(async (req, res) => {
-  const { id } = req.params;
+recordRoutes.route('/notifications').get(async (req, res) => {
   try {
     const driver = await dbo.getDB();
     const { records } = await driver.executeQuery(
-      'MATCH (:User{id: $id})-[r]->(n:Notification) RETURN n, r.read AS r',
-      { id },
+      'MATCH (:User{loggedIn: true})-[r]->(n:Notification) RETURN n, r.read AS r',
+      {},
       { database: 'neo4j' },
     );
     const results = [];
@@ -1010,13 +984,13 @@ recordRoutes.route('/notifications/:id').get(async (req, res) => {
         id: record.get('n').properties.id,
         date: record.get('n').properties.date,
         text: record.get('n').properties.text,
-        edited: record.get('r'),
+        read: record.get('r'),
       });
     });
     res.status(200).json({
       status: 'Success',
       result: {
-        file: results,
+        notifications: results,
       },
     });
   } catch (err) {
@@ -1062,7 +1036,7 @@ recordRoutes.route('/notifications/:id').delete(async (req, res) => {
     const driver = await dbo.getDB();
     const { summary } = await driver.executeQuery(
       'MATCH (n:Notification{id: $id}) DETACH DELETE n',
-      { id: parseInt(id) },
+      { id },
       { database: 'neo4j' },
     );
     res.status(200).json({
@@ -1082,25 +1056,37 @@ recordRoutes.route('/auth/login').post(async (req, res) => {
   const { login, password } = req.body;
   try {
     const driver = await dbo.getDB();
-    const { records } = await driver.executeQuery(
-      'MATCH (u:User {name: $login, password: $password}) RETURN u',
+    const { loggedUsers } = await driver.executeQuery(
+      'MATCH (u:User {loggedIn: true}) RETURN u',
       { login, password },
       { database: 'neo4j' },
     );
-    if (records.length > 0) {
-      const { summary } = await driver.executeQuery(
-        'MATCH (u:User {name: $login, password: $password}) SET u.loggedIn = true',
+    if (!loggedUsers) {
+      const { records } = await driver.executeQuery(
+        'MATCH (u:User {name: $login, password: $password}) RETURN u',
         { login, password },
         { database: 'neo4j' },
       );
-      res.status(200).json({
-        status: 'Success',
-        result: `Successfully logged in as ${login} in ${summary.resultAvailableAfter} ms.`,
-      });
+      if (records.length > 0) {
+        const { summary } = await driver.executeQuery(
+          'MATCH (u:User {name: $login, password: $password}) SET u.loggedIn = true',
+          { login, password },
+          { database: 'neo4j' },
+        );
+        res.status(200).json({
+          status: 'Success',
+          result: `Successfully logged in as ${login} in ${summary.resultAvailableAfter} ms.`,
+        });
+      } else {
+        res.status(200).json({
+          status: 'Error',
+          result: 'Username or password incorrect',
+        });
+      }
     } else {
       res.status(200).json({
         status: 'Error',
-        result: 'Username or password incorrect',
+        result: 'Already logged in',
       });
     }
   } catch (err) {
